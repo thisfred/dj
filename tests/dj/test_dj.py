@@ -2,9 +2,8 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 
-from pytest import fixture
-
 from dj import from_json, to_json
+from pytest import fixture
 
 
 class ReleaseType(Enum):
@@ -27,7 +26,7 @@ def a_record() -> Record:
         artist="Waxahatchee",
         title="St. Cloud",
         release_date=date(2020, 3, 27),
-        release_type=ReleaseType.download,
+        release_type=ReleaseType.lp,
     )
 
 
