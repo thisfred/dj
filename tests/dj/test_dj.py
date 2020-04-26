@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 
-from dj import from_json, to_json
 from pytest import fixture
+
+from dj import from_json, to_json
 
 
 class ReleaseType(Enum):
