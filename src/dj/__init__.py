@@ -18,12 +18,12 @@ def to_serializable(val: Any) -> str:
 
 
 @to_serializable.register
-def iso_date_string(value: date, /) -> str:
+def serialize_date(value: date, /) -> str:
     return value.isoformat()
 
 
 @to_serializable.register
-def value(enum: Enum) -> Union[str, int]:
+def serialize_enum(enum: Enum) -> Union[str, int]:
     result: Union[str, int] = enum.value
     return result
 
@@ -51,5 +51,5 @@ def from_json(json_input: str, cls: Any) -> DataClassInstance:
     return instance
 
 
-def to_json(thing: DataClassInstance) -> str:
-    return json.dumps(asdict(thing), default=to_serializable)
+def to_json(instance: DataClassInstance) -> str:
+    return json.dumps(asdict(instance), default=to_serializable)
