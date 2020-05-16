@@ -124,10 +124,11 @@ Adapted = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 
 def adapt(function: Adaptable) -> Adapted:
     sig = signature(function)
-    first_parameter = next(k for k in sig.parameters.keys())
-    if not is_dataclass(first_parameter):
+    name, value = next(p for p in sig.parameters.items())
+    if not is_dataclass(value.annotation):
         raise TypeError(
-            f"{first_parameter} needs to be (type annotated as) a dataclass."
+            f"{name} needs to be (type annotated as) a dataclass, but found "
+            f"{value.annotation}."
         )
 
     def wrapper(in_: Mapping[str, Any], /) -> Mapping[str, Any]:
