@@ -1,10 +1,23 @@
 import json
 
-from dataclasses import asdict, fields
+from dataclasses import asdict, fields, is_dataclass
 from datetime import date
 from enum import Enum
 from functools import singledispatch
-from typing import Any, Iterable, Mapping, Protocol, Type, Union, runtime_checkable
+from inspect import signature
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    Protocol,
+    Type,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
 
 
 class ValidationError(Exception):
@@ -20,23 +33,27 @@ class GenericAlias(Protocol):
     __args__: Iterable[Any]
 
 
-class DataClassInstance(Protocol):
-    _FIELDS: Mapping[str, Any]  # pylint: disable=unsubscriptable-object
+class DataClass(Protocol):
+    __dataclass_fields__: MutableMapping[str, Any]
 
 
-def from_json(json_input: str, cls: Any) -> DataClassInstance:
+def from_json(json_input: str, cls: Any) -> DataClass:
     raw = json.loads(json_input)
     for field in fields(cls):
         raw[field.name] = validate_and_deserialize(
             field.type, raw.get(field.name), field.name
         )
 
-    instance: DataClassInstance = cls(**raw)
+    instance: DataClass = cls(**raw)
     return instance
 
 
-def to_json(instance: DataClassInstance) -> str:
+def to_json(instance: DataClass) -> str:
     return json.dumps(asdict(instance), default=to_serializable)
+
+
+def to_dict(instance: DataClass) -> Dict[str, Any]:
+    return asdict(instance)
 
 
 @singledispatch
@@ -91,3 +108,39 @@ def validate_and_deserialize(  # noqa
         f"Field `{field_name}` got value of unexpected type: {type(value)}, should be: "
         f"{field_type}."
     )
+
+
+T = TypeVar("T")
+
+
+@singledispatch
+def _adapt(_to_type: Type[T], value: T, /) -> T:
+    return value
+
+
+Adaptable = Callable[[Any], Any]
+Adapted = Callable[[Mapping[str, Any]], Mapping[str, Any]]
+
+
+def adapt(function: Adaptable) -> Adapted:
+    sig = signature(function)
+    first_parameter = next(k for k in sig.parameters.keys())
+    if not is_dataclass(first_parameter):
+        raise TypeError(
+            f"{first_parameter} needs to be (type annotated as) a dataclass."
+        )
+
+    def wrapper(in_: Mapping[str, Any], /) -> Mapping[str, Any]:
+        bound = sig.bind(in_)
+        bound.apply_defaults()
+        for key, value in bound.arguments.items():
+            to_type = sig.parameters[key].annotation
+            if is_dataclass(to_type):
+                bound.arguments[key] = to_type(**value)
+            else:
+                bound.arguments[key] = _adapt(to_type, value)
+
+        result = function(bound.args[0])
+        return asdict(result)
+
+    return wrapper

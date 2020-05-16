@@ -7,7 +7,7 @@ from typing import Optional
 
 from pytest import fixture, raises
 
-from dj import ValidationError, from_json, to_json
+from dj import ValidationError, adapt, from_json, to_dict, to_json
 
 
 class ReleaseType(Enum):
@@ -20,9 +20,14 @@ class ReleaseType(Enum):
 class Record:
     artist: str
     title: str
-    release_type: Optional[ReleaseType]
-    release_date: Optional[date]
+    release_type: Optional[ReleaseType] = None
+    release_date: Optional[date] = None
     notes: Optional[str] = None
+
+
+@dataclass
+class Response:
+    message: str
 
 
 @fixture
@@ -35,6 +40,21 @@ def a_record() -> Record:
     )
 
 
+@fixture
+def an_lp() -> Record:
+    return Record(artist="Destroyer", title="Have We Met", release_type=ReleaseType.lp)
+
+
+def is_lp(record: Record) -> Response:
+    if record.release_type and record.release_type == ReleaseType.lp:
+        return Response("Success!")
+
+    return Response("Failure")
+
+
+adapted = adapt(is_lp)
+
+
 def test_roundtrip(a_record):
     assert from_json(to_json(a_record), Record) == a_record
 
@@ -45,3 +65,9 @@ def test_raises_nice_exceptions(a_record):
 
     with raises(ValidationError, match="title"):
         from_json(json.dumps(broken_record), Record)
+
+
+def test_adapt_takes_dictionary(an_lp):
+    lp_as_dict = to_dict(an_lp)
+    result = adapted(lp_as_dict)
+    assert result["message"] == "Success!"
