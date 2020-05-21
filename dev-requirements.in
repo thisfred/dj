@@ -11,7 +11,7 @@ neovim-remote
 pre-commit
 pre-commit
 pytest
-pytest-testmom
+pytest-testmon
 pytest-watch
 tox
 twine
