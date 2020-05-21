@@ -1,2 +1,2 @@
-include LICENSE Makefile Makefile.venv *.md *.toml *.yml *.yaml *.ini
+include LICENSE Makefile Makefile.venv .coveragerc *.md *.toml *.yml *.yaml *.ini *.txt *.in
 recursive-include tests *.py
