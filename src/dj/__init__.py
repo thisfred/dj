@@ -24,9 +24,6 @@ class ValidationError(Exception):
     """Validation error for deserializing JSON into dataclasses."""
 
 
-SIMPLE_TYPES = {str, int, bool, type(None)}
-
-
 @runtime_checkable
 class GenericAlias(Protocol):
     __origin__: Type[Any]
@@ -63,7 +60,7 @@ def to_serializable(value: Any, /) -> str:
 
     https://hynek.me/articles/serialization/
     """
-    return str(value)
+    raise NotImplementedError("Register a serializable with @to_serializable.register.")
 
 
 @to_serializable.register
@@ -77,32 +74,12 @@ def serialize_enum(enum: Enum, /) -> Union[str, int]:
     return result
 
 
-def validate_and_deserialize(  # noqa
-    field_type: Any, value: Any, field_name: str
-) -> Any:
-    # This has a high cyclomatic complexity, but splitting it up would lead to more
-    # indirection than this short function merits. Will revisit as it grows.
-    if field_type in SIMPLE_TYPES:
-        if isinstance(value, field_type):
-            return value
+A = TypeVar("A")
 
-    if field_type is date:
-        return date.fromisoformat(value)
 
-    if isinstance(field_type, GenericAlias):
-        if field_type.__origin__ == Union:
-            for possible_type in field_type.__args__:
-                try:
-                    return validate_and_deserialize(possible_type, value, field_name)
-                except ValidationError:
-                    continue
-
-    try:
-        if issubclass(field_type, Enum):
-            return field_type(value)
-
-    except TypeError:
-        pass
+def identity(value: Any, field_type: Type[A], field_name: str) -> A:
+    if isinstance(value, field_type):
+        return value
 
     raise ValidationError(
         f"Field `{field_name}` got value of unexpected type: {type(value)}, should be: "
@@ -110,12 +87,62 @@ def validate_and_deserialize(  # noqa
     )
 
 
+def deserialize_date(value: Any, field_type: Type[date], field_name: str) -> date:
+    return date.fromisoformat(value)
+
+
+TYPE_DISPATCH: Dict[Type[Any], Callable[[Any, Type[Any], str], Any]] = {
+    str: identity,
+    int: identity,
+    bool: identity,
+    type(None): identity,
+    date: deserialize_date,
+}
+
+
+def deserialize_generic_alias(value: Any, field_type: Any, field_name: str) -> Any:
+    if field_type.__origin__ != Union:
+        raise ValidationError(f"Cannot deserialize fields of type: `{field_type}`")
+
+    errors = []
+    for possible_type in field_type.__args__:
+        try:
+            return validate_and_deserialize(possible_type, value, field_name)
+        except ValidationError as e:
+            if possible_type is not type(None):  # noqa
+                errors.append(e)
+            continue
+
+    raise errors[0]
+
+
+def is_enum(field_type: Any) -> bool:
+    return issubclass(field_type, Enum)
+
+
 T = TypeVar("T")
+E = TypeVar("E", bound=Enum)
+Enumerable = Callable[[T], E]
 
 
-@singledispatch
-def _adapt(_to_type: Type[T], value: T, /) -> T:
-    return value
+def deserialize_enum(value: Any, field_type: Enumerable[T, E]) -> E:
+    try:
+        return field_type(value)
+    except ValueError as e:
+        raise ValidationError(*e.args)
+
+
+def validate_and_deserialize(
+    field_type: Any, value: Any, field_name: str
+) -> Any:  # noqa
+    if field_type in TYPE_DISPATCH:
+        return TYPE_DISPATCH[field_type](value, field_type, field_name)
+
+    if isinstance(field_type, GenericAlias):
+        return deserialize_generic_alias(value, field_type, field_name)
+
+    assert is_enum(field_type)
+    return deserialize_enum(value, field_type)
 
 
 Adaptable = Callable[[Any], Any]
@@ -124,24 +151,26 @@ Adapted = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 
 def adapt(function: Adaptable) -> Adapted:
     sig = signature(function)
-    name, value = next(p for p in sig.parameters.items())
-    if not is_dataclass(value.annotation):
-        raise TypeError(
-            f"{name} needs to be (type annotated as) a dataclass, but found "
-            f"{value.annotation}."
-        )
+    for name, value in sig.parameters.items():
+        if not is_dataclass(value.annotation):
+            raise TypeError(
+                f"Argument `{name}` needs to be (type-annotated as) a dataclass, but "
+                f"found `{value.annotation}`."
+            )
 
-    def wrapper(in_: Mapping[str, Any], /) -> Mapping[str, Any]:
-        bound = sig.bind(in_)
-        bound.apply_defaults()
-        for key, value in bound.arguments.items():
-            to_type = sig.parameters[key].annotation
-            if is_dataclass(to_type):
+        def wrapper(in_: Mapping[str, Any], /) -> Mapping[str, Any]:
+            bound = sig.bind(in_)
+            bound.apply_defaults()
+            for key, value in bound.arguments.items():
+                to_type = sig.parameters[key].annotation
                 bound.arguments[key] = to_type(**value)
-            else:
-                bound.arguments[key] = _adapt(to_type, value)
 
-        result = function(bound.args[0])
-        return asdict(result)
+            result = function(bound.args[0])
+            return asdict(result)
 
-    return wrapper
+        return wrapper
+    else:
+        raise TypeError(
+            "Can only adapt functions that take a dataclass argument as the first "
+            "parameter."
+        )

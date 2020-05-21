@@ -1,46 +1,52 @@
-include Makefile.venv
+PYTHON?=python3.8
+VENV?=./.venv/bin
 
-Makefile.venv:
-	curl \
-		-o Makefile.fetched \
-		-L "https://github.com/sio/Makefile.venv/raw/v2020.02.26/Makefile.venv"
-	echo "e0aeebe87c811fd9dfd892d4debb813262646e3e82691e8c4c214197c4ab6fac *Makefile.fetched" \
-		| sha256sum --check - \
-		&& mv Makefile.fetched Makefile.venv
+.venv: .venv/bin/activate
 
-PY=python3.8
+.venv/bin/activate: setup.cfg
+	test -d .venv || $(PYTHON) -m venv .venv
+	$(VENV)/pip install --upgrade pip
+	$(VENV)/pip install -e .
+	touch $@
+
+.venv/bin/pip-compile: .venv
+	$(VENV)/pip install --upgrade pip-tools
+	touch $@
+
+.venv/.dev: dev-requirements.txt
+	$(VENV)/pip install -Ur dev-requirements.txt
+	touch $@
 
 .PHONY: test
-
-test: venv test_extras
+test: .venv/.dev
 	$(VENV)/tox
 
-.PHONY: test_extras
-test_extras: venv
-	$(VENV)/pip install -e .[test]
-
-.PHONY: dev_extras
-dev_extras: venv
-	$(VENV)/pip install -e .[dev]
-
 .PHONY: test_continually
-test_continually: test_extras
+test_continually: .venv/.dev
+	$(VENV)/pip install --upgrade pytest-testmon pytest-watch
 	$(VENV)/ptw -- --testmon
 
 .PHONY: precommit_update
-precommit_update: dev_extras
+precommit_update: .venv/.dev
 	$(VENV)/pre-commit autoupdate
 
 .PHONY: test_release
-test_release: dev_extras distclean
+test_release: .venv/.dev distclean
 	$(VENV)/python setup.py sdist bdist_wheel
 	$(VENV)/twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
 .PHONY: release
-release: dev_extras distclean
+release: .venv/.dev distclean
 	$(VENV)/python setup.py sdist bdist_wheel
 	$(VENV)/twine upload dist/*
 
 .PHONY: distclean
 distclean:
 	rm -rf dist build
+
+.PHONY: clean-venv
+clean-venv:
+	rm -rf .venv
+
+%.txt: %.in $(VENV)/pip-compile
+	$(VENV)/pip-compile -v --generate-hashes --output-file $@ $<

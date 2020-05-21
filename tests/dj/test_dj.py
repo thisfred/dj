@@ -3,7 +3,7 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from pytest import fixture, raises
 
@@ -45,6 +45,7 @@ def an_lp() -> Record:
     return Record(artist="Destroyer", title="Have We Met", release_type=ReleaseType.lp)
 
 
+@adapt
 def is_lp(record: Record) -> Response:
     if record.release_type and record.release_type == ReleaseType.lp:
         return Response("Success!")
@@ -52,13 +53,65 @@ def is_lp(record: Record) -> Response:
     return Response("Failure")
 
 
-adapted = adapt(is_lp)
+# serialization
+def test_to_json(a_record):
+    assert (
+        to_json(a_record)
+        == '{"artist": "Waxahatchee", "title": "St. Cloud", "release_type": "lp", '
+        '"release_date": "2020-03-27", "notes": null}'
+    )
 
 
+def test_unknown_types_cannot_be_serialized():
+    @dataclass
+    class Unserializable:
+        callable: Callable[[Any], Any]
+
+    def foo(bar):
+        return bar
+
+    unserializable = Unserializable(callable=foo)
+
+    with raises(NotImplementedError, match="Register"):
+        to_json(unserializable)
+
+
+# deserialization
+def test_from_json(a_record):
+    assert (
+        from_json(
+            '{"artist": "Waxahatchee", "title": "St. Cloud", "release_type": "lp", '
+            '"release_date": "2020-03-27", "notes": null}',
+            Record,
+        )
+        == a_record
+    )
+
+
+def test_validates_enum_membership():
+    with raises(ValidationError, match="not a valid ReleaseType"):
+        from_json(
+            '{"artist": "Waxahatchee", "title": "St. Cloud", "release_type": '
+            '"laserdisc", "release_date": "2020-03-27"}',
+            Record,
+        )
+
+
+def test_cannot_deserialize_arbitrary_generic_types():
+    @dataclass
+    class Undeserializable:
+        callable: Callable[[Any], Any]
+
+    with raises(ValidationError, match="Cannot deserialize"):
+        from_json('{"callable": "foo"}', Undeserializable)
+
+
+# roundtrip
 def test_roundtrip(a_record):
     assert from_json(to_json(a_record), Record) == a_record
 
 
+# adapt
 def test_raises_nice_exceptions(a_record):
     broken_record = json.loads(to_json(a_record))
     broken_record["title"] = 12
@@ -69,5 +122,21 @@ def test_raises_nice_exceptions(a_record):
 
 def test_adapt_takes_dictionary(an_lp):
     lp_as_dict = to_dict(an_lp)
-    result = adapted(lp_as_dict)
+    result = is_lp(lp_as_dict)
     assert result["message"] == "Success!"
+
+
+def test_cannot_adapt_function_that_takes_a_non_dataclass_first_argument():
+    with raises(TypeError, match="dataclass"):
+
+        @adapt
+        def foo(bar: str) -> Response:
+            ...
+
+
+def test_cannot_adapt_function_that_takes_no_arguments():
+    with raises(TypeError, match="dataclass"):
+
+        @adapt
+        def foo() -> Response:
+            ...

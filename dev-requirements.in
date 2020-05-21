@@ -1,0 +1,19 @@
+-c requirements.in
+black
+check-manifest
+covdefaults
+coverage
+flake8
+isort
+mypy
+neovim
+neovim-remote
+pre-commit
+pre-commit
+pytest
+pytest-testmom
+pytest-watch
+tox
+twine
+twine
+wheel
