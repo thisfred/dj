@@ -40,3 +40,9 @@ repos:
     language: system
     files: requirements\.(txt|in)$
     entry: make update-dependencies
+  - id: check-unused-code
+    name: Detect Unused Code
+    language: system
+    types: [file, python]
+    pass_filenames: false
+    entry: make check-unused-code

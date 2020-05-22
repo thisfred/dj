@@ -438,6 +438,10 @@ virtualenv==20.0.21 \
     --hash=sha256:a116629d4e7f4d03433b8afa27f43deba09d48bc48f5ecefa4f015a178efb6cf \
     --hash=sha256:a730548b27366c5e6cbdf6f97406d861cccece2e22275e8e1a757aeff5e00c70 \
     # via pre-commit, tox
+vulture==1.4 \
+    --hash=sha256:7ed28f87e6b08e62675946c96788f30f44da6882ad07f4af50485b65a0fac77a \
+    --hash=sha256:89f977c83043c9e01336eedc1b86346a82264d6c85498b7fab4722d914a5f171 \
+    # via -r dev-requirements.in
 watchdog==0.10.2 \
     --hash=sha256:c560efb643faed5ef28784b2245cf8874f939569717a4a12826a173ac644456b \
     # via pytest-watch

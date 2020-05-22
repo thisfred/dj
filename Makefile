@@ -55,3 +55,7 @@ clean-venv:
 .PHONY: update-dependencies
 update-dependencies: .venv/.dev
 	make *requirements.txt
+
+.PHONY: check-unused-code
+check-unused-code: .venv/.dev
+	$(VENV)/vulture --min-confidence 100 src/dj tests
