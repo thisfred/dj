@@ -9,11 +9,9 @@ mypy
 neovim
 neovim-remote
 pre-commit
-pre-commit
 pytest
 pytest-testmon
 pytest-watch
 tox
-twine
 twine
 wheel
