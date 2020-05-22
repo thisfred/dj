@@ -32,3 +32,11 @@ repos:
   rev: v1.9.0
   hooks:
   - id: setup-cfg-fmt
+
+- repo: local
+  hooks:
+  - id: requirements
+    name: Check Requirements
+    language: system
+    files: requirements\.(txt|in)$
+    entry: make update-dependencies

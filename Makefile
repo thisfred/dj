@@ -15,6 +15,7 @@ VENV?=./.venv/bin
 
 .venv/.dev: dev-requirements.txt
 	$(VENV)/pip install -Ur dev-requirements.txt
+	$(VENV)/pre-commit install --install-hooks
 	touch $@
 
 .PHONY: test
@@ -50,3 +51,7 @@ clean-venv:
 
 %.txt: %.in $(VENV)/pip-compile
 	$(VENV)/pip-compile -v --generate-hashes --output-file $@ $<
+
+.PHONY: update-dependencies
+update-dependencies: .venv/.dev
+	make *requirements.txt
